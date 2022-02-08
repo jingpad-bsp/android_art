@@ -1410,6 +1410,10 @@ class Dex2Oat final {
           LOG(WARNING) << "Could not open vdex file in DexMetadata archive: " << error_msg;
         } else {
           input_vdex_file_ = std::make_unique<VdexFile>(std::move(input_file));
+          if (input_vdex_file_->HasDexSection()) {
+            LOG(ERROR) << "The dex metadata is not allowed to contain dex files";
+            return false;
+          }
           VLOG(verifier) << "Doing fast verification with vdex from DexMetadata archive";
         }
       }
@@ -2401,8 +2405,8 @@ class Dex2Oat final {
       }
     } else if (zip_fd_ != -1) {
       DCHECK_EQ(oat_writers_.size(), 1u);
-      if (!oat_writers_[0]->AddZippedDexFilesSource(File(zip_fd_, /* check_usage */ false),
-                                                    zip_location_.c_str())) {
+      if (!oat_writers_[0]->AddDexFileSource(File(zip_fd_, /* check_usage */ false),
+                                             zip_location_.c_str())) {
         return false;
       }
     } else if (oat_writers_.size() > 1u) {
@@ -2975,6 +2979,8 @@ static dex2oat::ReturnCode Dex2oat(int argc, char** argv) {
 
   // Check early that the result of compilation can be written
   if (!dex2oat->OpenFile()) {
+    // Flush close so that the File Guard checks don't fail the assertions.
+    dex2oat->FlushCloseOutputFiles();
     return dex2oat::ReturnCode::kOther;
   }
 
